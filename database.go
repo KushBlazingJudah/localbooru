@@ -1,35 +1,108 @@
 package localbooru
 
 import (
-	"database/sql"
 	"context"
-	"time"
+	"database/sql"
+	"fmt"
 	"strings"
+	"time"
+
+	_ "embed"
+	_ "github.com/mattn/go-sqlite3"
 )
 
+//go:embed schema.sql
+var dbSchema string
+
 type database struct {
-	c *sql.Conn 
+	c *sql.DB
 }
 
 type Post struct {
-	ID int64
+	ID int64 `json:"id"`
 
-	Author string
-	Score int
-	Source string
-	Rating string
-	Tags []string
+	Author string   `json:"author,omitempty"` // Dunno if correct
+	Score  int      `json:"score"`
+	Source string   `json:"source,omitempty"`
+	Rating string   `json:"rating"`
+	Tags   []string `json:"-"`
 
-	Created time.Time
-	Updated time.Time
+	Created time.Time `json:"created_at"`
+	Updated time.Time `json:"updated_at"`
 
-	Booru string
-	BooruID string
+	// Booru is the source booru.
+	// Populated by Boorumux. Not in Danbooru API.
+	Booru string `json:"booru,omitempty"`
 
-	Hash string
-	Ext string
-	Width int
-	Height int
+	// Booru is the ID of this post from the source booru.
+	// Populated by Boorumux. Not in Danbooru API.
+	BooruID string `json:"booru_id,omitempty"`
+
+	Hash   string `json:"md5"`
+	Ext    string `json:"file_ext"`
+	Width  int    `json:"image_width"`
+	Height int    `json:"image_height"`
+
+	// TagString is Tags, but concatenated to conform to Danbooru's API.
+	//
+	// This field is not populated by any database methods and exists
+	// solely to aid JSON marshalling.
+	TagString string `json:"tag_string"`
+
+	// FileUrl is the URL to the full sized version of this post.
+	//
+	// This field is not populated by any database methods and exists
+	// solely to aid JSON marshalling.
+	FileUrl string `json:"file_url"`
+
+	// ThumbUrl is the URL to the "large" version of this post.
+	// TODO: I forget what the thumbnail version is, so this is the
+	// thumbnail size.
+	//
+	// This field is not populated by any database methods and exists
+	// solely to aid JSON marshalling.
+	ThumbUrl string `json:"large_file_url,omitempty"`
+}
+
+var dbUpgrades = []string{
+	"", // blank to count for schema
+}
+
+func opendb(path string) (*database, error) {
+	c, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Exec schema if we need to
+	ver := 0
+	if err := c.QueryRow("PRAGMA user_version").Scan(&ver); err != nil {
+		c.Close()
+		return nil, err
+	}
+
+	if ver < len(dbUpgrades) {
+		if ver == 0 {
+			if _, err := c.Exec(dbSchema); err != nil {
+				c.Close()
+				return nil, err
+			}
+		} else {
+			for _, v := range dbUpgrades[ver:] {
+				if _, err := c.Exec(v); err != nil {
+					c.Close()
+					return nil, err
+				}
+			}
+		}
+
+		if _, err := c.Exec("PRAGMA user_version=" + fmt.Sprint(len(dbUpgrades))); err != nil {
+			c.Close()
+			return nil, err
+		}
+	}
+
+	return &database{c: c}, nil
 }
 
 // Post returns a post's information for its id.
@@ -44,7 +117,9 @@ func (d *database) Post(ctx context.Context, id int64) (Post, error) {
 
 	var ct, ut int64
 
-	err = tx.QueryRowContext(ctx, `SELECT author, score, source, rating, created, updated, booru, booru_id, hash, ext, width, height FROM posts WHERE id = ?`, p).Scan(&p.Author, &p.Score, &p.Source, &p.Rating, &ct, &ut, &p.Booru, &p.BooruID, &p.Hash, &p.Ext, &p.Width, &p.Height)
+	if err := tx.QueryRowContext(ctx, `SELECT author, score, source, rating, created, updated, booru, booru_id, hash, ext, width, height FROM posts WHERE id = ?`, p).Scan(&p.Author, &p.Score, &p.Source, &p.Rating, &ct, &ut, &p.Booru, &p.BooruID, &p.Hash, &p.Ext, &p.Width, &p.Height); err != nil {
+		return p, err
+	}
 
 	p.Created = time.Unix(ct, 0)
 	p.Updated = time.Unix(ut, 0)
@@ -90,7 +165,7 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 			if i > 0 {
 				s.WriteString(` OR`)
 			}
-			s.WriteString( `tag = ?`)
+			s.WriteString(`tag = ?`)
 			a = append(a, v)
 		}
 
@@ -155,7 +230,7 @@ func (d *database) Posts(ctx context.Context, search []string, offset, limit int
 	}
 
 	posts := make([]Post, 0, limit)
-	
+
 	for rows.Next() {
 		p := Post{}
 		var ct, ut int64
@@ -175,7 +250,7 @@ func (d *database) Posts(ctx context.Context, search []string, offset, limit int
 		if err != nil {
 			return posts, err
 		}
-		
+
 		for rows.Next() {
 			s := ""
 			if err := rows.Scan(&s); err != nil {
