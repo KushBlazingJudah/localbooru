@@ -30,7 +30,7 @@ func binHash(h string) string {
 
 func (h *HTTP) xfrm(v Post) Post {
 	v.FileUrl = fmt.Sprintf("%s/img/%s/%s.%s", h.BaseURL, binHash(v.Hash), v.Hash, v.Ext)
-	v.ThumbUrl = fmt.Sprintf("%s/img/%s/%s.thumb.%s", h.BaseURL, binHash(v.Hash), v.Hash, v.Ext)
+	v.ThumbUrl = fmt.Sprintf("%s/img/%s/%s.thumb.jpg", h.BaseURL, binHash(v.Hash), v.Hash)
 	v.TagString = strings.Join(v.Tags, " ")
 
 	return v
@@ -155,12 +155,16 @@ func (h *HTTP) newPost(w http.ResponseWriter, r *http.Request) error {
 
 	// Write to img
 	pth := fmt.Sprintf("./img/%s/%s.%s", binHash(pi.Hash), pi.Hash, pi.Ext)
+	tpth := fmt.Sprintf("./img/%s/%s.thumb.jpg", binHash(pi.Hash), pi.Hash)
 	dir := path.Dir(pth)
 	if err := os.MkdirAll(dir, 0777); err != nil {
 		return err
 	}
 
-	return os.Rename(tf.Name(), pth)
+	if err := os.Rename(tf.Name(), pth); err != nil {
+		return err
+	}
+	return thumbify(pth, tpth)
 }
 
 func (h *HTTP) Open(path string) error {
