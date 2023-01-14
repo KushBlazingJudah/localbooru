@@ -198,14 +198,14 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 
 	s.WriteString(" ORDER BY id DESC")
 
-	if offset > 0 {
-		s.WriteString(" OFFSET ")
-		a = append(a, offset)
-	}
-
 	if limit > 0 {
 		s.WriteString(" LIMIT ?")
 		a = append(a, limit)
+	}
+
+	if offset > 0 {
+		s.WriteString(" OFFSET ?")
+		a = append(a, offset)
 	}
 
 	return s.String(), a
