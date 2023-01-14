@@ -147,28 +147,32 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 
 	s := strings.Builder{}
 	a := []interface{}{}
-	id := len(query) > 0
+	id := false
 	in := ""
 	rating := ""
 
-	if id {
-		s.WriteString(`SELECT post FROM posttag WHERE`)
-		for i, v := range query {
-			if strings.HasPrefix(v, "rating:") {
-				rating = strings.TrimPrefix(v, "rating:")
-				continue
-			} else if strings.HasPrefix(v, "score:") {
-				// TODO
-				continue
-			}
-
-			if i > 0 {
-				s.WriteString(` OR`)
-			}
-			s.WriteString(` tag = ?`)
-			a = append(a, v)
+	for _, v := range query {
+		if strings.HasPrefix(v, "rating:") {
+			rating = strings.TrimPrefix(v, "rating:")
+			continue
+		} else if strings.HasPrefix(v, "score:") {
+			// TODO
+			continue
 		}
 
+		// TODO: This is wrong
+		// It incorrectly matches against any tags instead of ensuring that all exist
+		if !id {
+			s.WriteString(`SELECT post FROM posttag WHERE`)
+		} else {
+			s.WriteString(` OR`)
+		}
+		id = true
+		s.WriteString(` tag = ?`)
+		a = append(a, v)
+	}
+
+	if id {
 		in = s.String()
 		s.Reset()
 	}
@@ -183,7 +187,7 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 
 	if rating != "" {
 		if in != "" {
-			s.WriteString(" OR")
+			s.WriteString(" AND")
 		} else {
 			s.WriteString(" WHERE")
 		}
@@ -222,6 +226,7 @@ func (d *database) Posts(ctx context.Context, search []string, offset, limit int
 	defer tx.Rollback()
 
 	query, args := makePostQuery(search, offset, limit)
+	fmt.Println(query)
 	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
