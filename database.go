@@ -117,14 +117,14 @@ func (d *database) Post(ctx context.Context, id int64) (Post, error) {
 
 	var ct, ut int64
 
-	if err := tx.QueryRowContext(ctx, `SELECT author, score, source, rating, created, updated, booru, booru_id, hash, ext, width, height FROM posts WHERE id = ?`, p).Scan(&p.Author, &p.Score, &p.Source, &p.Rating, &ct, &ut, &p.Booru, &p.BooruID, &p.Hash, &p.Ext, &p.Width, &p.Height); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT author, score, source, rating, created, updated, booru, booru_id, hash, ext, width, height FROM posts WHERE id = ?`, id).Scan(&p.Author, &p.Score, &p.Source, &p.Rating, &ct, &ut, &p.Booru, &p.BooruID, &p.Hash, &p.Ext, &p.Width, &p.Height); err != nil {
 		return p, err
 	}
 
 	p.Created = time.Unix(ct, 0)
 	p.Updated = time.Unix(ut, 0)
 
-	rows, err := tx.QueryContext(ctx, `SELECT tag FROM posttag WHERE id = ?`, id)
+	rows, err := tx.QueryContext(ctx, `SELECT tag FROM posttag WHERE post = ?`, id)
 	if err != nil {
 		return p, err
 	}
@@ -193,7 +193,7 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 	}
 
 	if offset > 0 {
-		s.WriteString(" OFFSET ?")
+		s.WriteString(" OFFSET ")
 		a = append(a, offset)
 	}
 
@@ -242,11 +242,13 @@ func (d *database) Posts(ctx context.Context, search []string, offset, limit int
 
 		p.Created = time.Unix(ct, 0)
 		p.Updated = time.Unix(ut, 0)
+
+		posts = append(posts, p)
 	}
 	rows.Close()
 
 	for i, p := range posts {
-		rows, err := tx.QueryContext(ctx, `SELECT tag FROM posttag WHERE id = ?`, p.ID)
+		rows, err := tx.QueryContext(ctx, `SELECT tag FROM posttag WHERE post = ?`, p.ID)
 		if err != nil {
 			return posts, err
 		}
@@ -290,7 +292,7 @@ func (d *database) SavePost(ctx context.Context, p *Post) error {
 
 	// Save tags
 	for _, v := range p.Tags {
-		_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO posttag(post, tag) VALUES(?, ?)`, p.ID, v)
+		_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO posttag(post, tag) VALUES(?, ?)`, id, v)
 		if err != nil {
 			return err
 		}

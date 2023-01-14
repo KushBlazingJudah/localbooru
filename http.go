@@ -4,9 +4,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -51,7 +51,7 @@ func (h *HTTP) posts(w http.ResponseWriter, r *http.Request) error {
 	}
 	offset := page * pageLimit
 
-	query := []string{}
+	query := []string(nil)
 	if q := qv.Get("tags"); q != "" {
 		query = strings.Split(q, " ")
 	}
@@ -66,7 +66,7 @@ func (h *HTTP) posts(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h *HTTP) post(w http.ResponseWriter, r *http.Request) error {
-	sid := strings.TrimSuffix(strings.TrimPrefix(r.URL.EscapedPath(), "posts/"), ".json")
+	sid := strings.TrimSuffix(strings.TrimPrefix(r.URL.EscapedPath(), "/posts/"), ".json")
 	id, err := strconv.ParseInt(sid, 10, 64)
 	if err != nil {
 		return err
@@ -77,16 +77,23 @@ func (h *HTTP) post(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	h.xfrm(post)
+	post = h.xfrm(post)
 	return json.NewEncoder(w).Encode(post)
 }
 
 func (h *HTTP) newPost(w http.ResponseWriter, r *http.Request) error {
+	// TODO: Drastically rewrite this.
+	// All of this was brought together in a few hours in one night with
+	// one goal: to get this to work.
+
 	if r.Method != "POST" {
-		return nil
+		panic("not POST")
 	}
 
 	mr, err := r.MultipartReader()
+	if err != nil {
+		return err
+	}
 
 	var pi *Post
 	var tf *os.File
@@ -94,18 +101,19 @@ func (h *HTTP) newPost(w http.ResponseWriter, r *http.Request) error {
 	md := md5.New()
 
 	for p, err := mr.NextPart(); err == nil; p, err = mr.NextPart() {
-		t := p.Header.Get("Content-Type")
-		if t == "application/json" {
+		if p.FormName() == "info" {
 			if err := json.NewDecoder(p).Decode(&pi); err != nil {
 				return err
 			}
-		} else if strings.HasPrefix(t, "image/") || strings.HasPrefix(t, "video/") {
-			exts, err := mime.ExtensionsByType(t)
-			if err != nil {
-				return err
+			fmt.Println("read post info")
+		} else if p.FormName() == "file" {
+			if tf != nil {
+				panic("too many files")
 			}
 
-			ext = exts[0][1:]
+			ext = path.Ext(p.FileName())[1:]
+
+			fmt.Println("read file...")
 
 			// Write to temp file
 			tf, err = os.CreateTemp("", "lbupload*."+ext)
@@ -118,10 +126,11 @@ func (h *HTTP) newPost(w http.ResponseWriter, r *http.Request) error {
 			if _, err := io.Copy(tf, io.TeeReader(p, md)); err != nil {
 				return err
 			}
+			fmt.Println("save file")
 		}
 	}
 
-	if err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return err
 	}
 
@@ -129,6 +138,8 @@ func (h *HTTP) newPost(w http.ResponseWriter, r *http.Request) error {
 		// TODO
 		panic("supply pi or tf")
 	}
+
+	fmt.Println(pi.TagString)
 
 	// Populate some info
 	pi.Tags = strings.Split(pi.TagString, " ")
@@ -162,15 +173,15 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.EscapedPath()
 
 	var err error
-	if p == "posts.json" {
+	if p == "/posts.json" {
 		err = h.posts(w, r)
-	} else if p == "post" {
+	} else if p == "/post" {
 		err = h.newPost(w, r)
-	} else if strings.HasPrefix(p, "posts/") {
+	} else if strings.HasPrefix(p, "/posts/") {
 		err = h.post(w, r)
-	} else if strings.HasPrefix(p, "img/") {
+	} else if strings.HasPrefix(p, "/img/") {
 		if h.fs == nil {
-			h.fs = http.StripPrefix("img", http.FileServer(http.Dir("./img")))
+			h.fs = http.StripPrefix("/img", http.FileServer(http.Dir("./img")))
 		}
 
 		h.fs.ServeHTTP(w, r)
