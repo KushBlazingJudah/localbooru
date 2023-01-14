@@ -152,7 +152,7 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 	rating := ""
 
 	if id {
-		s.WriteString(`SELECT id FROM posttag WHERE`)
+		s.WriteString(`SELECT post FROM posttag WHERE`)
 		for i, v := range query {
 			if strings.HasPrefix(v, "rating:") {
 				rating = strings.TrimPrefix(v, "rating:")
@@ -165,7 +165,7 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 			if i > 0 {
 				s.WriteString(` OR`)
 			}
-			s.WriteString(`tag = ?`)
+			s.WriteString(` tag = ?`)
 			a = append(a, v)
 		}
 
@@ -191,6 +191,8 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 		s.WriteString(" rating = ?")
 		a = append(a, rating)
 	}
+
+	s.WriteString(" ORDER BY id DESC")
 
 	if offset > 0 {
 		s.WriteString(" OFFSET ")
