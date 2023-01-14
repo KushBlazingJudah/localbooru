@@ -1,0 +1,26 @@
+CREATE TABLE posts(
+	id INTEGER PRIMARY KEY,
+
+	author TEXT,
+	score INTEGER NOT NULL DEFAULT 0,
+	source TEXT,
+	rating TEXT,
+	created INTEGER NOT NULL DEFAULT 0,
+	updated INTEGER NOT NULL DEFAULT 0,
+
+	booru TEXT,
+	booru_id TEXT,
+
+	hash TEXT NOT NULL,
+	ext TEXT NOT NULL,
+	width INTEGER NOT NULL DEFAULT 0,
+	height INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE posttag(
+	post INTEGER NOT NULL,
+	tag TEXT NOT NULL,
+
+	UNIQUE(post, tag),
+	FOREIGN KEY(post) REFERENCES posts(id) ON DELETE CASCADE
+);
