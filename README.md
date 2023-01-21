@@ -35,4 +35,4 @@ When the page finishes loading, Localbooru has saved the image and hopefully
 Boorumux redirected you back to the page you were on.
 
 You may view all of your saved images in the "local" booru, complete with tag
-and rating search, even if it is currently broken.
+and rating search.

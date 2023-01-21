@@ -2,9 +2,9 @@ package localbooru
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
-	"os"
 )
 
 const (

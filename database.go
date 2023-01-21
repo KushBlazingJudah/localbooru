@@ -186,16 +186,21 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 		// TODO: This is wrong
 		// It incorrectly matches against any tags instead of ensuring that all exist
 		if !id {
-			s.WriteString(`SELECT post FROM posttag WHERE`)
+			s.WriteString(`SELECT post FROM posttag GROUP BY post HAVING SUM(tag in (`)
 		} else {
-			s.WriteString(` OR`)
+			s.WriteString(`,`)
 		}
 		id = true
-		s.WriteString(` tag = ?`)
+		s.WriteString(`?`)
 		a = append(a, v)
 	}
 
 	if id {
+		s.WriteString(`)) = ?`)
+
+		// len(a) = the amount of tags we're looking for
+		a = append(a, len(a))
+
 		in = s.String()
 		s.Reset()
 	}
