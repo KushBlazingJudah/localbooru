@@ -66,6 +66,29 @@ type Post struct {
 
 var dbUpgrades = []string{
 	"", // blank to count for schema
+	`
+		CREATE TABLE posts_new(
+			id INTEGER PRIMARY KEY,
+
+			author TEXT,
+			score INTEGER NOT NULL DEFAULT 0,
+			source TEXT,
+			rating TEXT,
+			created INTEGER NOT NULL DEFAULT 0,
+			updated INTEGER NOT NULL DEFAULT 0,
+
+			booru TEXT,
+			booru_id TEXT,
+
+			hash TEXT UNIQUE NOT NULL,
+			ext TEXT NOT NULL,
+			width INTEGER NOT NULL DEFAULT 0,
+			height INTEGER NOT NULL DEFAULT 0
+		);
+		INSERT INTO posts_new SELECT * FROM posts;
+		DROP TABLE posts;
+		ALTER TABLE posts_new RENAME TO posts;
+	`,
 }
 
 func opendb(path string) (*database, error) {
@@ -306,5 +329,27 @@ func (d *database) SavePost(ctx context.Context, p *Post) error {
 	}
 
 	p.ID = id
+	return tx.Commit()
+}
+
+func (d *database) Delete(ctx context.Context, p int64) error {
+	tx, err := d.c.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Delete from posts table
+	_, err = tx.ExecContext(ctx, `DELETE FROM posts WHERE id = ?`, p)
+	if err != nil {
+		return err
+	}
+
+	// Delete from posttag table
+	_, err = tx.ExecContext(ctx, `DELETE FROM posttag WHERE post = ?`, p)
+	if err != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
