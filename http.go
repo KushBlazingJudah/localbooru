@@ -24,10 +24,6 @@ type HTTP struct {
 	fs http.Handler
 }
 
-func binHash(h string) string {
-	return h[:2] + "/" + h[2:4]
-}
-
 func (h *HTTP) xfrm(v Post) Post {
 	v.FileUrl = fmt.Sprintf("%s/img/%s/%s.%s", h.BaseURL, binHash(v.Hash), v.Hash, v.Ext)
 	v.ThumbUrl = fmt.Sprintf("%s/img/%s/%s.thumb.jpg", h.BaseURL, binHash(v.Hash), v.Hash)
@@ -79,6 +75,25 @@ func (h *HTTP) post(w http.ResponseWriter, r *http.Request) error {
 
 	post = h.xfrm(post)
 	return json.NewEncoder(w).Encode(post)
+}
+
+func (h *HTTP) delPost(w http.ResponseWriter, r *http.Request) error {
+	qv := r.URL.Query()
+
+	post := int64(0)
+	if p := qv.Get("post"); p != "" {
+		post, _ = strconv.ParseInt(p, 10, 64)
+	}
+
+	p, err := h.db.Post(r.Context(), post)
+	if err != nil {
+		return err
+	}
+
+	if err := deleteFile("./img", p.Hash, p.Ext); err != nil {
+		return err
+	}
+	return h.db.Delete(r.Context(), post)
 }
 
 func (h *HTTP) newPost(w http.ResponseWriter, r *http.Request) error {
@@ -181,6 +196,8 @@ func (h *HTTP) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		err = h.posts(w, r)
 	} else if p == "/post" {
 		err = h.newPost(w, r)
+	} else if p == "/delete" {
+		err = h.delPost(w, r)
 	} else if strings.HasPrefix(p, "/posts/") {
 		err = h.post(w, r)
 	} else if strings.HasPrefix(p, "/img/") {
