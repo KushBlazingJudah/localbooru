@@ -181,6 +181,10 @@ func makePostQuery(query []string, offset, limit int) (string, []interface{}) {
 		} else if strings.HasPrefix(v, "score:") {
 			// TODO
 			continue
+		} else if strings.HasPrefix(v, "md5:") {
+			// This is special in that it will only match one file or none at all
+			// Therefore we can just do one query instead of matching tags
+			return `SELECT id, author, score, source, rating, created, updated, booru, booru_id, hash, ext, width, height FROM posts WHERE hash = ?`, []interface{}{strings.TrimPrefix(v, "md5:")}
 		}
 
 		// TODO: This is wrong
